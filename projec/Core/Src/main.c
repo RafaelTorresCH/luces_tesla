@@ -43,7 +43,12 @@
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+uint32_t left_toggles = 0;
+uint32_t righ_toggles = 0;
+uint32_t park_toggles = 0;
+uint32_t left_last_press_tick = 0;
+uint32_t righ_last_press_tick = 0;
+uint32_t park_last_press_tick = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -52,36 +57,124 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void heartbeat(void);
+void turn_signal_left(void);
+void turn_signal_righ(void);
+void park_signal(void);
 /* USER CODE END PFP */
-uint32_t left_toggles = 0;
+
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  if(GPIO_Pin == S1_Pin){
-	  HAL_UART_Transmit(&huart2,"S1\r\n", 4, 10);
-	  left_toggles = 6;
-  }
+	if (GPIO_Pin == S1_Pin) {
+		//s1: letf directional
+		HAL_UART_Transmit(&huart2, "S1\n", 3, 10);
+		if (HAL_GetTick() < (left_last_press_tick + 300)) { // if last press was in the last 300ms
+			left_toggles = 0xFFFFFF; // a long time toggling (infinite)
+		} else {
+			left_toggles = 6;
+			righ_toggles = 0;
+			park_toggles = 0;
+		}
+		left_last_press_tick = HAL_GetTick();
+	}
+
+	if (GPIO_Pin == S3_Pin) {
+		//s3: righ directional
+		HAL_UART_Transmit(&huart2, "S3\n", 3, 10);
+		if(HAL_GetTick() < righ_last_press_tick + 300 ){
+			righ_toggles = 0xFFFFFF; // a long time toggling (infinite)
+		}
+		else{
+			righ_toggles = 6;
+			left_toggles = 0;
+			park_toggles = 0;
+		}
+		righ_last_press_tick = HAL_GetTick();
+
+	}
+
+	if (GPIO_Pin == S2_Pin) {
+			//s2: park directional
+			HAL_UART_Transmit(&huart2, "S2\r\n", 4, 10);
+			if(HAL_GetTick() < park_last_press_tick + 300 ){
+				park_toggles = 0xFFFFFF; // a long time toggling (infinite)
+			}
+			else{
+				park_toggles = 6;
+				left_toggles = 0;
+				righ_toggles = 0;
+			}
+			park_last_press_tick = HAL_GetTick();
+
+		}
+
 }
 
 
 
-void heartbeat(void){
-	static uint32_t heartbeat_tick = 0;//crea una variable global
+void heartbeat(void)
+{
+	static uint32_t heartbeat_tick = 0;
 	if(heartbeat_tick < HAL_GetTick()){
-		if(left_toggles > 0){
-			heartbeat_tick = HAL_GetTick() + 500;
+		heartbeat_tick = HAL_GetTick() + 1000;
+		HAL_GPIO_TogglePin(D1_GPIO_Port, D1_Pin);
+	}
+
+}
+
+//direccional izquierda
+
+void turn_signal_left(void)
+{
+	static uint32_t turn_toggle_tick = 0;
+	if (turn_toggle_tick < HAL_GetTick()) {
+		if (left_toggles > 0) {
+			turn_toggle_tick = HAL_GetTick() + 500;
 			HAL_GPIO_TogglePin(D3_GPIO_Port, D3_Pin);
 			left_toggles--;
+		}else {
+			HAL_GPIO_WritePin(D3_GPIO_Port, D3_Pin, 1);
 		}
-		else{
-			HAL_GPIO_WritePin(D3_GPIO_Port, D3_Pin,1);
-		}
-
 
 	}
 }
+
+void turn_signal_righ(void)
+{
+	static uint32_t turn_toggle_tick2 = 0;
+	if (turn_toggle_tick2 < HAL_GetTick()) {
+		if (righ_toggles > 0) {
+			turn_toggle_tick2 = HAL_GetTick() + 500;
+			HAL_GPIO_TogglePin(D4_GPIO_Port, D4_Pin);
+			righ_toggles--;
+		}else {
+			HAL_GPIO_WritePin(D4_GPIO_Port, D4_Pin, 1);
+		}
+
+	}
+}
+
+void park_signal(void)
+{
+
+	static uint32_t turn_toggle_tick3 = 0;
+	if (turn_toggle_tick3 < HAL_GetTick()) {
+		if (park_toggles > 0) {
+			turn_toggle_tick3 = HAL_GetTick() + 500;
+			HAL_GPIO_TogglePin(D4_GPIO_Port, D4_Pin);
+			HAL_GPIO_TogglePin(D3_GPIO_Port, D3_Pin);
+			park_toggles--;
+		}else{
+			HAL_GPIO_WritePin(D4_GPIO_Port, D4_Pin, 1);
+			HAL_GPIO_WritePin(D3_GPIO_Port, D3_Pin, 1);
+		}
+
+	}
+
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -90,6 +183,7 @@ void heartbeat(void){
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -122,8 +216,17 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	 heartbeat();
+
     /* USER CODE BEGIN 3 */
+	  heartbeat();
+	  if(park_toggles != 0){
+		  park_signal();
+	  }else{
+		  turn_signal_left();
+		  turn_signal_righ();
+	  }
+
+
   }
   /* USER CODE END 3 */
 }
@@ -232,13 +335,19 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, D1_Pin|D3_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(D2_GPIO_Port, D2_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(D4_GPIO_Port, D4_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : S1_Pin S2_Pin */
-  GPIO_InitStruct.Pin = S1_Pin|S2_Pin;
+  /*Configure GPIO pin : S1_Pin */
+  GPIO_InitStruct.Pin = S1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(S1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : S2_Pin */
+  GPIO_InitStruct.Pin = S2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(S2_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : D1_Pin D3_Pin */
   GPIO_InitStruct.Pin = D1_Pin|D3_Pin;
@@ -247,14 +356,23 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : D2_Pin */
-  GPIO_InitStruct.Pin = D2_Pin;
+  /*Configure GPIO pin : S3_Pin */
+  GPIO_InitStruct.Pin = S3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(S3_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : D4_Pin */
+  GPIO_InitStruct.Pin = D4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(D2_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(D4_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
   HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
