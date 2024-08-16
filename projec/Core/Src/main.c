@@ -49,6 +49,7 @@ uint32_t park_toggles = 0;
 uint32_t left_last_press_tick = 0;
 uint32_t righ_last_press_tick = 0;
 uint32_t park_last_press_tick = 0;
+uint8_t status = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -69,6 +70,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if (GPIO_Pin == S1_Pin) {
 		//s1: letf directional
+		status = 1;
 		HAL_UART_Transmit(&huart2, "S1\n", 3, 10);
 		if (HAL_GetTick() < (left_last_press_tick + 300)) { // if last press was in the last 300ms
 			left_toggles = 0xFFFFFF; // a long time toggling (infinite)
@@ -82,6 +84,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 	if (GPIO_Pin == S3_Pin) {
 		//s3: righ directional
+		status = 1;
 		HAL_UART_Transmit(&huart2, "S3\n", 3, 10);
 		if(HAL_GetTick() < righ_last_press_tick + 300 ){
 			righ_toggles = 0xFFFFFF; // a long time toggling (infinite)
@@ -97,6 +100,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
 	if (GPIO_Pin == S2_Pin) {
 			//s2: park directional
+			if(status == 1){
+				HAL_GPIO_WritePin(D3_GPIO_Port, D3_Pin, 1);
+				HAL_GPIO_WritePin(D4_GPIO_Port, D4_Pin, 1);
+				status = 0;
+			}
 			HAL_UART_Transmit(&huart2, "S2\r\n", 4, 10);
 			if(HAL_GetTick() < park_last_press_tick + 300 ){
 				park_toggles = 0xFFFFFF; // a long time toggling (infinite)
@@ -328,6 +336,7 @@ static void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
@@ -336,6 +345,12 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(D4_GPIO_Port, D4_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : S1_Pin */
   GPIO_InitStruct.Pin = S1_Pin;
